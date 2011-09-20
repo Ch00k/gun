@@ -19,164 +19,221 @@ import tempfile
 import time
 
 
-COLORS = {'\x1b[32m': '</span><span style="color:darkgreen;font-weight:normal">',
-          '\x1b[36;01m': '</span><span style="color:turquoise;font-weight:bold">',
-          '\x1b[34;01m': '</span><span style="color:blue;font-weight:bold">',
-          '\x1b[39;49;00m': '</span><span style="color:black;font-weight:normal">',
-          '\x1b[33;01m': '</span><span style="color:orange;font-weight:bold">',
-          '\x1b[32;01m': '</span><span style="color:limegreen;font-weight:bold">',
-          '\x1b[31;01m': '</span><span style="color:red;font-weight:bold">',
-          '\x0d': '<br>'
-          }
+"""Reading all the configuration"""
+config = ConfigParser.RawConfigParser()
+try:
+    config.read('/etc/gun.conf')
+except IOError:
+    print 'Cannot open configuration file'
+timestamp = time.strftime('%Y%m%d-%H%M%S')
+sync_overlays = config.getboolean('GENERAL', 'sync_overlays')
+SYNC_TREE_COMMAND = config.get('SYNC', 'tree_command')
+SYNC_OVERLAYS_COMMAND = config.get('SYNC', 'overlays_command') if sync_overlays else None
+EMERGE_COMMAND = config.get('UPDATE', 'command')
+EMAIL_NOTIFY = config.getboolean('NOTIFY', 'email')
+JABBER_NOTIFY = config.getboolean('NOTIFY', 'jabber')
+OUTPUT_FILE = tempfile.NamedTemporaryFile(suffix = '',
+                                          prefix = 'gun-',
+                                          dir = '/var/tmp',
+                                          delete = True)
+MAIL_HOST = config.get('EMAIL', 'host')
+MAIL_USER = config.get('EMAIL', 'user')
+MAIL_PASSWORD = config.get('EMAIL', 'password')
+MAIL_PORT = config.get('EMAIL', 'port')
+MAIL_SENDER = config.get('EMAIL', 'mailfrom')
+MAIL_RECIPIENT = config.get('EMAIL', 'mailto')
+JABBER_SENDER = config.get('JABBER', 'jabber_from')
+JABBER_PASSWORD = config.get('JABBER', 'password')
+JABBER_RECIPIENT = config.get('JABBER', 'jabber_to')
+
+"""A replacement dict, that maps ANSI escape codes to HTML style tags to use
+within formatter function"""
+ESCAPE_MAP = {'\x1b[32m': '</span><span style="color:darkgreen;font-weight:normal">',
+              '\x1b[36;01m': '</span><span style="color:turquoise;font-weight:bold">',
+              '\x1b[34;01m': '</span><span style="color:blue;font-weight:bold">',
+              '\x1b[39;49;00m': '</span><span style="color:black;font-weight:normal">',
+              '\x1b[33;01m': '</span><span style="color:orange;font-weight:bold">',
+              '\x1b[32;01m': '</span><span style="color:limegreen;font-weight:bold">',
+              '\x1b[31;01m': '</span><span style="color:red;font-weight:bold">',
+              '\n': '<br>',
+              }
 
 
-class Timestamp(tempfile._RandomNameSequence):
-    def next(self):
-        return time.strftime('%Y%m%d-%H%M%S')
-
-tempfile._RandomNameSequence = Timestamp
-
-class GUN():
+class Gun(object):
     """Main class
     """
 
     def __init__(self):
-        """Reads configuration file, performs basic setup
+        """Createss a list of notifiers according to the notification
+        configuration
         """
-        config = ConfigParser.RawConfigParser()
-        try:
-            config.read('/etc/gun.conf')
-        except IOError:
-            print 'Cannot open configuration file'
-        
-        # General settings
-        self.sync_overlays = config.getboolean('GENERAL', 'sync_overlays')
-        
-        # Synchronization settings
-        self.sync_tree_command = config.get('SYNC', 'tree_command')
-        if self.sync_overlays:
-            self.sync_overlays_command = config.get('SYNC', 'overlays_command')
-        emerge_command = config.get('UPDATE', 'command')
+        self.notifiers = []
+        if EMAIL_NOTIFY:
+            self.notifiers.append(EmailNotifier(host = MAIL_HOST,
+                                                port = MAIL_PORT,
+                                                user = MAIL_USER,
+                                                password = MAIL_PASSWORD)
+                                  )
+        if JABBER_NOTIFY:
+            self.notifiers.append(JabberNotifier(jid = JABBER_SENDER,
+                                                 password = JABBER_PASSWORD)
+                                  )
     
-        # Notification settings
-        self.email_notify = config.getboolean('NOTIFY', 'email')
-        self.jabber_notify = config.getboolean('NOTIFY', 'jabber')
+    def _execute_command(self, command, stdout=None):
+        """A helper function for command execution
+        """
+        output = subprocess.Popen(args = [command],
+                                  shell = True,
+                                  stdout = stdout)
+        output.communicate()
         
-        # Email settings
-        self.mail_host = config.get('EMAIL', 'host')
-        self.mail_user = config.get('EMAIL', 'user')
-        self.mail_password = config.get('EMAIL', 'password')
-        self.mail_port = config.get('EMAIL', 'port')
-        self.mail_sender = config.get('EMAIL', 'mailfrom')
-        self.mail_recipient = config.get('EMAIL', 'mailto')
-        
-        # Jabber settings
-        self.jabber_sender = config.get('JABBER', 'jabber_from')
-        self.jabber_password = config.get('JABBER', 'password')
-        self.jabber_recipient = config.get('JABBER', 'jabber_to')
-
-        # Output file
-        timestamp = time.strftime('%Y%m%d-%H%M%S')
-        self.output_file = tempfile.NamedTemporaryFile(suffix = '',
-                                                       prefix = 'gun-',
-                                                       dir = '/var/tmp',
-                                                       delete = False)
-        
-        self.update_command = 'script -q -c \'%s\' -f %s' % (emerge_command,
-                                                             self.output_file.name)
+        return output
     
     def sync(self):
-        """SYNC Portage tree and overlays
+        """Sync Portage tree and overlays
         """
-        output = subprocess.Popen([self.sync_tree_command],
-                                  shell=True,
-                                  stdout=subprocess.PIPE)
-        output.communicate()
-        if self.sync_overlays:
-            output = subprocess.Popen([self.sync_overlays_command],
-                                      shell=True,
-                                      stdout=subprocess.PIPE)
-            output.communicate()
+        self._execute_command(command = SYNC_TREE_COMMAND,
+                              stdout = subprocess.PIPE)
+        
+        if SYNC_OVERLAYS_COMMAND is not None:
+            self._execute_command(command = SYNC_OVERLAYS_COMMAND,
+                                  stdout = subprocess.PIPE)
 
     def pretend_update(self):
-        """Runs emerge to get the list of packages ready for upgrade.
+        """Runs the emerge command to get the list of packages ready for update.
         Writes the list to file.
         """
-        output = subprocess.Popen([self.update_command],
-                                  shell=True)
-        output.communicate()
-        self.output_file.seek(0)
+        output = self._execute_command(command = EMERGE_COMMAND,
+                                       stdout = OUTPUT_FILE)
+        OUTPUT_FILE.seek(0)
         
-    def _ansi2html(self, colors):
-        """Parses the output file, produced by the script Linux tool and
-        translates ANSI terminal color codes into HTML tags
+    def notify(self):
+        """Sends updates notifications
+        """
+        for notifier in self.notifiers:
+            notifier.send()
+            notifier.disconnect()
+
+
+class Message(object):
+    """Formats the message body...
+    """
+    def formatter(self, input_file, escape_map):
+        """Parses the output file and replaces ANSI terminal escape codes
         """
         # Remove 'header' and 'footer' from the file
-        text = re.sub("(?s).*?(\[\x1b\[32mebuild)",
-                      "\\1",
-                      self.output_file.read(),
-                      1).split('Total', 1)[0]
-        pattern = '|'.join(map(re.escape, colors.keys()))
-        message = re.sub(pattern,
-                         lambda m:colors[m.group()],
-                         text)
-        self.output_file.seek(0)
+        stripped_text = re.sub(pattern = '(?s).*?(\[\x1b\[32mebuild)',
+                               repl = '\\1',
+                               string = input_file.read(),
+                               count = 1)
+        pattern = '|'.join(map(re.escape,
+                               escape_map.keys()))
+        formatted_body = re.sub(pattern = pattern,
+                                repl = lambda m:escape_map[m.group()],
+                                string = stripped_text)
+        input_file.seek(0)
+    
+        return formatted_body
+    
+    def as_plaintext(self):
+        """...as plain text
+        """
+        plaintext_map = ESCAPE_MAP
+        # We will delete the '\n' element from the dictionary since we do not
+        # want the newlines to be replaced in plain text
+        map(plaintext_map.pop, ['\n'], [])
+        # Replacing the values in dictionary with empty values
+        for key in plaintext_map.iterkeys():
+            plaintext_map[key] = ''
+        message = self.formatter(input_file = OUTPUT_FILE,
+                                 escape_map = plaintext_map)
         
         return message
+        
+    def as_html(self):
+        """...as HTML
+        """
+        message = self.formatter(input_file = OUTPUT_FILE,
+                                 escape_map = ESCAPE_MAP)
+        
+        return message
+        
 
-    def _send_email(self):
-        headers = ("From: %s\r\nTo: %s\r\nSubject: [%s] %s Packages to update\r\nContent-Type: text/html; charset=utf-8\r\n"
-                   % (self.mail_sender,
-                      self.mail_recipient,
-                      os.uname()[1],
-                      time.strftime('%Y-%m-%d')))
-        message = headers + self._ansi2html(colors = COLORS)
-        server = smtplib.SMTP()
+class EmailNotifier(object):
+    """Emails notifier class
+    """
+    def __init__(self, host, port, user, password):
+        """Creates a connection to SMTP server and performs SMTP authentication
+        """
+        self.smtp = smtplib.SMTP()
         try:
-            server.connect(self.mail_host,
-                            self.mail_port)
+            self.smtp.connect(host = host,
+                              port = port)
         except socket.error:
             print 'Cannot connect to SMTP server'
         try:
-            server.login(self.mail_user,
-                         self.mail_password)
+            self.smtp.login(user = user,
+                            password = password)
         except smtplib.SMTPAuthenticationError:
             print 'Cannot authenticate on SMTP server'
-        server.sendmail(self.mail_sender,
-                        self.mail_recipient,
-                        message)
-        server.quit()
-    
-    def _send_jabber(self):
-        for key in COLORS.iterkeys():
-            COLORS[key] = ''
-        message = self._ansi2html(colors = COLORS)
-        jid = xmpp.protocol.JID(self.jabber_sender)
-        cl = xmpp.Client(jid.getDomain(),
-                         debug=[])
-        if not cl.connect():
+            
+    def send(self):
+        """Compiles an email message and sends it
+        """
+        headers = ("From: %s\r\nTo: %s\r\nSubject: [%s] %s Packages to update\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"
+                   % (MAIL_SENDER,
+                      MAIL_RECIPIENT,
+                      os.uname()[1],
+                      time.strftime('%Y-%m-%d')))
+        html_header = '<html><head></head><body>\r\n<style type="text/css">\r\np\r\n{\r\nfont-family:monospace;\r\n}\r\n</style>\r\n<p>'
+        html_footer = '</p></body></html>'
+        body = Message()
+        message = body.as_html()
+        message = headers + html_header + message + html_footer
+        self.smtp.sendmail(from_addr = MAIL_SENDER,
+                           to_addrs = MAIL_RECIPIENT,
+                           msg = message)
+        
+    def disconnect(self):
+        """Disconnects from SMTP server
+        """
+        self.smtp.quit()
+        
+
+class JabberNotifier(object):
+    """Jabber notifier class
+    """
+    def __init__(self, jid, password):
+        """Creates a connection to XMPP server and performs user authentication
+        """
+        jabberid = xmpp.protocol.JID(jid = jid)
+        self.client = xmpp.Client(server = jabberid.getDomain(),
+                                  debug = [])
+        if not self.client.connect():
             raise IOError('Cannot connect to Jabber server')
         else:
-            if not cl.auth(jid.getNode(),
-                           self.jabber_password,
-                           resource=jid.getResource()):
+            if not self.client.auth(user = jabberid.getNode(),
+                                    password = password,
+                                    resource = jabberid.getResource()):
                 raise IOError('Cannot authenticate on Jabber server')
-            else:
-                cl.send(xmpp.protocol.Message(self.jabber_recipient,
-                                              message))
-        cl.disconnect()
-
-    def notify(self):
-        if self.email_notify:
-            self._send_email()
-        if self.jabber_notify:
-            self._send_jabber()
+            
+    def send(self):
+        """Sends Jabber message
+        """
+        body = Message()
+        message = body.as_plaintext()
+        self.client.send(xmpp.protocol.Message(to = JABBER_RECIPIENT,
+                                               body = message))
+        
+    def disconnect(self):
+        """Disconnects from XMPP server
+        """
+        self.client.disconnect()
             
             
 def main():
-    s = GUN()
-    s.sync()
-    s.pretend_update()
-    s.notify()
-
-# EOF
+    g = Gun()
+    g.sync()
+    g.pretend_update()
+    g.notify()
+    
