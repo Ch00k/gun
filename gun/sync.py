@@ -18,6 +18,8 @@ import re
 import tempfile
 import time
 import logging as log
+import sys
+
 
 """Setup logging"""
 log.basicConfig(filename = '/var/log/gun.log',
@@ -54,11 +56,15 @@ try:
     JABBER_SENDER = config.get('JABBER', 'jabber_from')
     JABBER_PASSWORD = config.get('JABBER', 'password')
     JABBER_RECIPIENT = config.get('JABBER', 'jabber_to')
-except ConfigParser.Error, error:
-    log.critical('Errors reading config file: ' % (error))
-    sys.exit('Errors reading config file: ' % (error))
+except ConfigParser.NoSectionError, error:
+    log.critical('Errors reading config file: %s' % (error))
+    sys.exit('Errors reading config file: %s' % (error))
+except ConfigParser.NoOptionError, error:
+    log.critical('Errors reading config file: %s' % (error))
+    sys.exit('Errors reading config file: %s' % (error))
 
 timestamp = time.strftime('%Y%m%d-%H%M%S')
+"""Creating tempfile"""
 try:
     OUTPUT_FILE = tempfile.NamedTemporaryFile(suffix = '',
                                               prefix = 'gun-',
@@ -69,8 +75,8 @@ except OSError, error:
     sys.exit('Cannot create tempfile: %s' % (error))
     
 
-"""A replacement dict, that maps ANSI escape codes to HTML style tags to use
-within formatter function"""
+"""A replacement dict, that maps ANSI escape codes to HTML tags to use
+within the formatter function"""
 ESCAPE_MAP = {'\x1b[32m': '</span><span style="color:darkgreen;font-weight:normal">',
               '\x1b[36;01m': '</span><span style="color:turquoise;font-weight:bold">',
               '\x1b[34;01m': '</span><span style="color:blue;font-weight:bold">',
@@ -206,7 +212,9 @@ class EmailNotifier(object):
             self.smtp.connect(host = host,
                               port = port)
         except socket.error, error:
-            log.error('Cannot connect to SMTP server: %s' % (error))
+            log.error('Cannot connect to SMTP server: %s: %s:%s' % (error,
+                                                                    host,
+                                                                    port))
         else:
             try:
                 self.smtp.login(user = user,
