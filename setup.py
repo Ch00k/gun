@@ -9,7 +9,7 @@ setup(
       description = 'Gentoo Updates Notifier',
       author = 'Andriy Yurchuk',
       author_email = 'ayurchuk@minuteware.net',
-      url = 'http://minuteware.net/gun',
+      url = 'https://github.com/Ch00k/gun',
       license = 'LICENSE.txt',
       long_description = open('README.rst').read(),
       entry_points = {

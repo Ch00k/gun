@@ -99,15 +99,26 @@ class Gun(object):
         log.info('gun started')
         self.notifiers = []
         if EMAIL_NOTIFY:
-            self.notifiers.append(EmailNotifier(host = MAIL_HOST,
+            try:
+                email_notifier  = EmailNotifier(host = MAIL_HOST,
                                                 port = MAIL_PORT,
                                                 user = MAIL_USER,
                                                 password = MAIL_PASSWORD)
-                                  )
+                self.notifiers.append(email_notifier)
+                log.info('Enabling Email notification')
+            except:
+                log.error('Email notification disabled')
+                pass
         if JABBER_NOTIFY:
-            self.notifiers.append(JabberNotifier(jid = JABBER_SENDER,
+            try:
+                jabber_notifier = JabberNotifier(jid = JABBER_SENDER,
                                                  password = JABBER_PASSWORD)
-                                  )
+                self.notifiers.append(jabber_notifier)
+                log.info('Enabling Jabber notification')
+            except:
+                log.error('Jabber notification disabled')
+                pass
+            
     
     def _execute_command(self, command, stdout=None):
         """A helper function for command execution
@@ -148,6 +159,8 @@ class Gun(object):
     def notify(self):
         """Sends updates notifications
         """
+        if self.notifiers == []:
+            log.warning('No notification methods available. Nothing to do...')
         for notifier in self.notifiers:
             notifier.send()
             notifier.disconnect()
@@ -182,13 +195,10 @@ class Message(object):
     def as_plaintext(self):
         """...as plain text
         """
-        plaintext_map = ESCAPE_MAP
+        plaintext_map = dict.fromkeys(ESCAPE_MAP, '')
         # We will delete the '\n' element from the dictionary since we do not
         # want the newlines to be replaced in plain text
         map(plaintext_map.pop, ['\n'], [])
-        # Replacing the values in dictionary with empty values
-        for key in plaintext_map.iterkeys():
-            plaintext_map[key] = ''
         message = self.formatter(escape_map = plaintext_map)
         
         return message
@@ -207,21 +217,22 @@ class EmailNotifier(object):
     def __init__(self, host, port, user, password):
         """Creates a connection to SMTP server and performs SMTP authentication
         """
-        self.smtp = smtplib.SMTP()
         try:
-            self.smtp.connect(host = host,
-                              port = port)
+            self.smtp = smtplib.SMTP(host = host,
+                                     port = port)
         except socket.error, error:
             log.error('Cannot connect to SMTP server: %s: %s:%s' % (error,
                                                                     host,
                                                                     port))
+            raise 
         else:
             try:
                 self.smtp.login(user = user,
                                 password = password)
-            except smtplib.SMTPAuthenticationError:
+            except smtplib.SMTPAuthenticationError, error:
                 log.error('Cannot authenticate on SMTP server: %d, %s' % (error[0],
                                                                           error[1]))
+                raise
             
     def send(self):
         """Compiles an email message and sends it
@@ -243,16 +254,11 @@ class EmailNotifier(object):
                                msg = message)
         except smtplib.SMTPRecipientsRefused, error:
             log.error('Cannot send email: %s' % (error))
-        except smtplib.SMTPServerDisconnected:
-            pass
         
     def disconnect(self):
         """Disconnects from SMTP server
         """
-        try:
-            self.smtp.quit()
-        except smtplib.SMTPServerDisconnected:
-            pass
+        self.smtp.quit()
         
 
 class JabberError(Exception):
@@ -279,6 +285,7 @@ class JabberNotifier(object):
                 JabberError().connect_error(), error
             except IOError, error:
                 log.error('%s: %s' % (error, jabberid.getDomain()))
+                raise
                 
         else:
             if not self.client.auth(user = jabberid.getNode(),
@@ -288,26 +295,21 @@ class JabberNotifier(object):
                     JabberError().auth_error(), error
                 except IOError, error:
                     log.error(error)
+                    raise
             
     def send(self):
         """Sends Jabber message
         """
         body = Message(input_file = OUTPUT_FILE)
         message = body.as_plaintext()
-        try:
-            log.info('Sending Jabber message')
-            self.client.send(xmpp.protocol.Message(to = JABBER_RECIPIENT,
+        log.info('Sending Jabber message')
+        self.client.send(xmpp.protocol.Message(to = JABBER_RECIPIENT,
                                                    body = message))
-        except AttributeError:
-            pass
         
     def disconnect(self):
         """Disconnects from XMPP server
         """
-        try:
-            self.client.disconnect()
-        except AttributeError:
-            pass
+        self.client.disconnect()
             
             
 def main():

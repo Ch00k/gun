@@ -3,7 +3,7 @@ gun
 ===
 
 :Author: `Andriy Yurchuk <ayurchuk@minuteware.net>`_
-:Version: 0.1.3
+:Version: 0.1.4
 :Web: http://github.com/Ch00k/gun
 :Git: ``git clone https://github.com/Ch00k/gun.git``
 
