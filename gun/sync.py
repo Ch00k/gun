@@ -77,15 +77,17 @@ except OSError, error:
 
 """A replacement dict, that maps ANSI escape codes to HTML tags to use
 within the formatter function"""
-ESCAPE_MAP = {'\x1b[32m': '</span><span style="color:darkgreen;font-weight:normal">',
-              '\x1b[36;01m': '</span><span style="color:turquoise;font-weight:bold">',
-              '\x1b[34;01m': '</span><span style="color:blue;font-weight:bold">',
-              '\x1b[39;49;00m': '</span><span style="color:black;font-weight:normal">',
-              '\x1b[33;01m': '</span><span style="color:orange;font-weight:bold">',
-              '\x1b[32;01m': '</span><span style="color:limegreen;font-weight:bold">',
-              '\x1b[31;01m': '</span><span style="color:red;font-weight:bold">',
-              '\n': '<br>',
-              }
+ESCAPE_MAP = \
+{
+    '\x1b[32m': '</span><span style="color:darkgreen;font-weight:normal">',
+    '\x1b[36;01m': '</span><span style="color:turquoise;font-weight:bold">',
+    '\x1b[34;01m': '</span><span style="color:blue;font-weight:bold">',
+    '\x1b[39;49;00m': '</span><span style="color:black;font-weight:normal">',
+    '\x1b[33;01m': '</span><span style="color:orange;font-weight:bold">',
+    '\x1b[32;01m': '</span><span style="color:limegreen;font-weight:bold">',
+    '\x1b[31;01m': '</span><span style="color:red;font-weight:bold">',
+    '\n': '<br>',
+}
 
 
 class Gun(object):
@@ -230,19 +232,29 @@ class EmailNotifier(object):
                 self.smtp.login(user = user,
                                 password = password)
             except smtplib.SMTPAuthenticationError, error:
-                log.error('Cannot authenticate on SMTP server: %d, %s' % (error[0],
-                                                                          error[1]))
+                log.error('Cannot authenticate on SMTP server: %d, %s'
+                          % (error[0],
+                             error[1]))
                 raise
             
     def send(self):
         """Compiles an email message and sends it
         """
-        headers = ("From: %s\r\nTo: %s\r\nSubject: [%s] %s Packages to update\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"
+        headers = ('From: %s\r\n' \
+                   'To: %s\r\n' \
+                   'Subject: [%s] %s Packages to update\r\n' \
+                   'Content-Type: text/html; charset=utf-8\r\n\r\n'
                    % (MAIL_SENDER,
                       MAIL_RECIPIENT,
                       os.uname()[1],
                       time.strftime('%Y-%m-%d')))
-        html_header = '<html><head></head><body>\r\n<style type="text/css">\r\np\r\n{\r\nfont-family:monospace;\r\n}\r\n</style>\r\n<p>'
+        html_header = '<html><head></head><body>\r\n' \
+                      '<style type="text/css">\r\n' \
+                      'p\r\n' \
+                      '{\r\n' \
+                      'font-family:monospace;\r\n'\
+                      '}\r\n'\
+                      '</style>\r\n<p>'
         html_footer = '</p></body></html>'
         body = Message(input_file = OUTPUT_FILE)
         message = body.as_html()
