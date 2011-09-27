@@ -46,11 +46,17 @@ try:
     EMERGE_OPTIONS = config.get('UPDATE', 'options')
     EMAIL_NOTIFY = config.getboolean('NOTIFY', 'email')
     JABBER_NOTIFY = config.getboolean('NOTIFY', 'jabber')
-
-    MAIL_HOST = config.get('EMAIL', 'host')
-    MAIL_USER = config.get('EMAIL', 'user')
-    MAIL_PASSWORD = config.get('EMAIL', 'password')
-    MAIL_PORT = config.get('EMAIL', 'port')
+    if config.has_option('EMAIL', 'server'):
+        MAIL_SERVER = config.get('EMAIL', 'server')
+    else:
+        MAIL_SERVER = 'localhost:25'
+    if config.has_option('EMAIL', 'user') and \
+       config.has_option('EMAIL', 'password'):
+        MAIL_USER = config.get('EMAIL', 'user')
+        MAIL_PASSWORD = config.get('EMAIL', 'password')
+    else:
+        MAIL_USER = None
+        MAIL_PASSWORD = None
     MAIL_SENDER = config.get('EMAIL', 'mailfrom')
     MAIL_RECIPIENT = config.get('EMAIL', 'mailto')
     JABBER_SENDER = config.get('JABBER', 'jabber_from')
@@ -102,8 +108,7 @@ class Gun(object):
         self.notifiers = []
         if EMAIL_NOTIFY:
             try:
-                email_notifier  = EmailNotifier(host = MAIL_HOST,
-                                                port = MAIL_PORT,
+                email_notifier  = EmailNotifier(server = MAIL_SERVER,
                                                 user = MAIL_USER,
                                                 password = MAIL_PASSWORD)
                 self.notifiers.append(email_notifier)
@@ -216,26 +221,46 @@ class Message(object):
 class EmailNotifier(object):
     """Emails notifier class
     """
-    def __init__(self, host, port, user, password):
+    def __init__(self, server, user, password):
         """Creates a connection to SMTP server and performs SMTP authentication
         """
         try:
-            self.smtp = smtplib.SMTP(host = host,
-                                     port = port)
+            if int(MAIL_SERVER.split(':')[1]) == 465:
+                self.smtp = smtplib.SMTP_SSL(server,
+                                             timeout = 15)
+            elif int(MAIL_SERVER.split(':')[1]) in (25, 587):
+                self.smtp = smtplib.SMTP(server,
+                                         timeout = 15)
+                try:
+                    self.smtp.starttls()
+                except smtplib.SMTPException, error:
+                    log.warning(error) # not sure if the user should see this
+                    pass
+            else:
+                raise ValueError('Invalid SMTP server port')
         except socket.error, error:
-            log.error('Cannot connect to SMTP server: %s: %s:%s' % (error,
-                                                                    host,
-                                                                    port))
-            raise 
+            log.error('Cannot connect to SMTP server: %s: '
+                      % (error,
+                         server))
+            raise
+        except ValueError, error:
+            log.error('Cannot connect to SMTP server: %s: %s'
+                      % (server,
+                         error))
+            raise
         else:
-            try:
-                self.smtp.login(user = user,
-                                password = password)
-            except smtplib.SMTPAuthenticationError, error:
-                log.error('Cannot authenticate on SMTP server: %d, %s'
-                          % (error[0],
-                             error[1]))
-                raise
+            if user is not None and password is not None:
+                try:
+                    self.smtp.login(user = user,
+                                    password = password)
+                except smtplib.SMTPAuthenticationError, error:
+                    log.error('Cannot authenticate on SMTP server: %d, %s'
+                              % (error[0],
+                                 error[1]))
+                    raise
+                except smtplib.SMTPException, error:
+                    log.error('Cannot authenticate on SMTP server: %s' % error)
+                    raise
             
     def send(self):
         """Compiles an email message and sends it
