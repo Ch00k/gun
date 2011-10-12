@@ -105,27 +105,6 @@ class Gun(object):
         configuration
         """
         log.info('gun started')
-        self.notifiers = []
-        if EMAIL_NOTIFY:
-            try:
-                email_notifier  = EmailNotifier(server = MAIL_SERVER,
-                                                user = MAIL_USER,
-                                                password = MAIL_PASSWORD)
-                self.notifiers.append(email_notifier)
-                log.info('Enabling Email notification')
-            except:
-                log.error('Email notification disabled')
-                pass
-        if JABBER_NOTIFY:
-            try:
-                jabber_notifier = JabberNotifier(jid = JABBER_SENDER,
-                                                 password = JABBER_PASSWORD)
-                self.notifiers.append(jabber_notifier)
-                log.info('Enabling Jabber notification')
-            except:
-                log.error('Jabber notification disabled')
-                pass
-            
     
     def _execute_command(self, command, stdout=None):
         """A helper function for command execution
@@ -166,6 +145,26 @@ class Gun(object):
     def notify(self):
         """Sends updates notifications
         """
+        self.notifiers = []
+        if EMAIL_NOTIFY:
+            try:
+                email_notifier  = EmailNotifier(server = MAIL_SERVER,
+                                                user = MAIL_USER,
+                                                password = MAIL_PASSWORD)
+                self.notifiers.append(email_notifier)
+                log.info('Enabling Email notification')
+            except:
+                log.error('Email notification disabled')
+                pass
+        if JABBER_NOTIFY:
+            try:
+                jabber_notifier = JabberNotifier(jid = JABBER_SENDER,
+                                                 password = JABBER_PASSWORD)
+                self.notifiers.append(jabber_notifier)
+                log.info('Enabling Jabber notification')
+            except:
+                log.error('Jabber notification disabled')
+                pass
         if self.notifiers == []:
             log.warning('No notification methods available. Nothing to do...')
         for notifier in self.notifiers:
