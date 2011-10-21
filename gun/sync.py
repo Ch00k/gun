@@ -29,7 +29,7 @@ log.basicConfig(filename = '/var/log/gun.log',
 
 """Reading all the configuration"""
 config = ConfigParser.RawConfigParser()
-if config.read('/etc/gun.conf') != []:
+if config.read('/etc/gun/gun.conf') != []:
     pass
 else:
     log.critical('Cannot open configuration file')
@@ -59,9 +59,10 @@ try:
         MAIL_PASSWORD = None
     MAIL_SENDER = config.get('EMAIL', 'mailfrom')
     MAIL_RECIPIENT = config.get('EMAIL', 'mailto')
-    JABBER_SENDER = config.get('JABBER', 'jabber_from')
+    JABBER_SERVER = config.get('JABBER', 'server')
+    JABBER_LOGIN = config.get('JABBER', 'login')
     JABBER_PASSWORD = config.get('JABBER', 'password')
-    JABBER_RECIPIENT = config.get('JABBER', 'jabber_to')
+    JABBER_RECIPIENT = config.get('JABBER', 'jabberto')
 except ConfigParser.NoSectionError, error:
     log.critical('Errors reading config file: %s' % (error))
     sys.exit('Errors reading config file: %s' % (error))
@@ -153,12 +154,13 @@ class Gun(object):
                                                 password = MAIL_PASSWORD)
                 self.notifiers.append(email_notifier)
                 log.info('Enabling Email notification')
-            except:
-                log.error('Email notification disabled')
+            except error:
+                log.error('Email notification disabled: %s' % error)
                 pass
         if JABBER_NOTIFY:
             try:
-                jabber_notifier = JabberNotifier(jid = JABBER_SENDER,
+                jabber_notifier = JabberNotifier(server = JABBER_SERVER,
+                                                 login = JABBER_LOGIN,
                                                  password = JABBER_PASSWORD)
                 self.notifiers.append(jabber_notifier)
                 log.info('Enabling Jabber notification')
@@ -310,23 +312,23 @@ class JabberError(Exception):
 class JabberNotifier(object):
     """Jabber notifier class
     """
-    def __init__(self, jid, password):
+    def __init__(self, server, login, password):
         """Creates a connection to XMPP server and performs user authentication
         """
-        jabberid = xmpp.protocol.JID(jid = jid)
-        self.client = xmpp.Client(server = jabberid.getDomain(),
+        self.client = xmpp.Client(server = server.split(':')[0],
+                                  port = server.split(':')[1],
                                   debug = [])
         if not self.client.connect():
             try:
                 JabberError().connect_error(), error
             except IOError, error:
-                log.error('%s: %s' % (error, jabberid.getDomain()))
+                log.error('%s: %s' % (error, server))
                 raise
                 
         else:
-            if not self.client.auth(user = jabberid.getNode(),
+            if not self.client.auth(user = login,
                                     password = password,
-                                    resource = jabberid.getResource()):
+                                    resource = 'gun'):
                 try:
                     JabberError().auth_error(), error
                 except IOError, error:
@@ -340,7 +342,7 @@ class JabberNotifier(object):
         message = body.as_plaintext()
         log.info('Sending Jabber message')
         self.client.send(xmpp.protocol.Message(to = JABBER_RECIPIENT,
-                                                   body = message))
+                                               body = message))
         
     def disconnect(self):
         """Disconnects from XMPP server

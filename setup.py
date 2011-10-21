@@ -18,6 +18,6 @@ setup(
                                           ]
                       },
       packages = ['gun'],
-      data_files = [('/etc/', ['data/gun.conf'])],
+      data_files = [('/etc/gun/', ['data/gun.conf'])],
       install_requires = ['xmpppy >= 0.5.0-rc1']
       )
