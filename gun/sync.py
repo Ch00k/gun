@@ -89,6 +89,7 @@ except OSError, error:
 ESCAPE_MAP = \
 {
     '\x1b[32m': '</span><span style="color:darkgreen;font-weight:normal">',
+    '\x1b[36m': '</span><span style="color:darkcyan;font-weight:normal">',
     '\x1b[36;01m': '</span><span style="color:turquoise;font-weight:bold">',
     '\x1b[34;01m': '</span><span style="color:blue;font-weight:bold">',
     '\x1b[39;49;00m': '</span><span style="color:black;font-weight:normal">',
