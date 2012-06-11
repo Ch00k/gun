@@ -111,12 +111,13 @@ class Gun(object):
         """
         log.info('gun started')
     
-    def _execute_command(self, command, stdout=None):
+    def _execute_command(self, command, stdout=None, stderr=None):
         """A helper function for command execution
         """
         output = subprocess.Popen(args = command,
                                   shell = True,
-                                  stdout = stdout)
+                                  stdout = stdout,
+				  stderr = stderr)
         output.communicate()
         
         return output
@@ -152,7 +153,8 @@ class Gun(object):
         command = '%s %s --pretend --color y' % (EMERGE_COMMAND, EMERGE_OPTIONS)
         log.info('Running emerge: "%s"' % command)
         self._execute_command(command = command,
-                              stdout = OUTPUT_FILE)
+                              stdout = OUTPUT_FILE,
+			      stderr = OUTPUT_FILE)
         OUTPUT_FILE.seek(0)
         
     def notify(self):
