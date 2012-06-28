@@ -201,16 +201,11 @@ class Message(object):
     def formatter(self, escape_map):
         """Parses the output file and replaces ANSI terminal escape codes
         """
-        # Remove 'header' and 'footer' from the file
-        stripped_text = re.sub(pattern = '(?s).*?(\[\x1b\[32mebuild)',
-                               repl = '\\1',
-                               string = self.text,
-                               count = 1)
         pattern = '|'.join(map(re.escape,
                                escape_map.keys()))
         formatted_body = re.sub(pattern = pattern,
                                 repl = lambda m:escape_map[m.group()],
-                                string = stripped_text)
+                                string = self.text)
     
         return formatted_body
     
