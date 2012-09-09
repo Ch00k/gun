@@ -98,6 +98,8 @@ ESCAPE_MAP = \
     '\x1b[32;01m': '</span><span style="color:limegreen;font-weight:bold">',
     '\x1b[31;01m': '</span><span style="color:red;font-weight:bold">',
     '\n': '<br>',
+    '<': '&lt;',
+    '>': '&gt;'
 }
 
 
